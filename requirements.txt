@@ -6,7 +6,7 @@ psycopg2-binary
 pandas
 numpy
 scikit-learn
-boto3
 python-dotenv
 requests
 locust
+boto3
