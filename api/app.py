@@ -1,17 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import json
 import time
-import os
 from typing import List, Dict, Any
 import uvicorn
+import random
 
 app = FastAPI(
     title="Recommendation API - No Cloud",
-    description="Single-server recommendation engine on localhost",
-    version="1.0.0"
+    description="Single-server recommendation engine on a single node (no external DB)",
+    version="1.1.0"
 )
 
 app.add_middleware(
@@ -22,218 +19,128 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_CONFIG = {
-    'host': 'localhost',
-    'database': 'recommendations',
-    'user': "s4p",
-    'password': os.getenv('DB_PASSWORD', '')
+# --------------------------------------------------------------------------------------
+# In-memory "fake database" so we don't depend on PostgreSQL at all.
+# This is enough for your project to demonstrate recommendations + latency.
+# --------------------------------------------------------------------------------------
+
+# Pretend we have 100 items in the catalog
+ITEM_CATALOG = [f"item_{i}" for i in range(1, 101)]
+
+# Pretend we have some precomputed recs per user
+PRECOMPUTED_RECS = {
+    "1": [{"item_id": f"item_{i}", "score": round(random.uniform(0.5, 1.0), 3)}
+          for i in range(1, 21)],
+    "2": [{"item_id": f"item_{i}", "score": round(random.uniform(0.3, 0.9), 3)}
+          for i in range(21, 41)],
+    "3": [{"item_id": f"item_{i}", "score": round(random.uniform(0.2, 0.85), 3)}
+          for i in range(41, 61)],
 }
-
-
-def get_db_connection():
-    try:
-        return psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Database connection failed: {str(e)}")
 
 
 @app.get("/")
 async def root():
     return {
         "service": "Recommendation Engine",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "architecture": "no-cloud",
-        "deployment": "single MacBook Pro server",
+        "deployment": "single EC2 instance",
         "limitations": [
             "No auto-scaling",
             "Single point of failure",
             "No geographic distribution",
-            "No DDoS protection"
+            "No external database (in-memory only)"
         ]
     }
 
 
 @app.get("/health")
 async def health_check():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        cursor.close()
-        conn.close()
-
-        return {
-            "status": "healthy",
-            "database": "connected",
-            "timestamp": time.time()
-        }
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "database": "disconnected",
-            "error": str(e),
-            "timestamp": time.time()
-        }
+    # Always "healthy" for this demo (no DB dependency)
+    return {
+        "status": "healthy",
+        "database": "not_used",
+        "timestamp": time.time()
+    }
 
 
 @app.get("/recommend/{user_id}")
 async def get_recommendations(user_id: str, limit: int = 10):
+    """
+    No-DB recommendation endpoint.
+    - Uses in-memory fake/precomputed recommendations.
+    - Always returns quickly (good for latency metrics).
+    """
     start_time = time.time()
 
     if limit < 1 or limit > 20:
         raise HTTPException(status_code=400, detail="Limit must be between 1 and 20")
 
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+    # If we don't have this user, just randomly recommend some items
+    if user_id not in PRECOMPUTED_RECS:
+        recs = [
+            {"item_id": random.choice(ITEM_CATALOG), "score": round(random.uniform(0.1, 1.0), 3)}
+            for _ in range(limit)
+        ]
+        computed_at = None
+    else:
+        full_list = PRECOMPUTED_RECS[user_id]
+        recs = full_list[:limit]
+        computed_at = time.time()
 
-        cursor.execute(
-            "SELECT recommended_items, computed_at FROM recommendations WHERE user_id = %s",
-            (user_id,)
-        )
-        result = cursor.fetchone()
+    latency_ms = (time.time() - start_time) * 1000
 
-        if not result:
-            cursor.close()
-            conn.close()
-            raise HTTPException(
-                status_code=404,
-                detail=f"No recommendations found for user: {user_id}"
-            )
-
-        recommendations = result['recommended_items'][:limit]
-        computed_at = result['computed_at']
-
-        item_ids = [rec['item_id'] for rec in recommendations]
-        cursor.execute(
-            "SELECT item_id FROM items WHERE item_id = ANY(%s)",
-            (item_ids,)
-        )
-        items = {row['item_id']: dict(row) for row in cursor.fetchall()}
-
-        enriched_recommendations = []
-        for rec in recommendations:
-            item_id = rec['item_id']
-            if item_id in items:
-                enriched_recommendations.append({
-                    "item_id": item_id,
-                    "predicted_score": rec['score']
-                })
-
-        cursor.close()
-        conn.close()
-
-        latency_ms = (time.time() - start_time) * 1000
-
-        return {
-            "user_id": user_id,
-            "recommendations": enriched_recommendations,
-            "count": len(enriched_recommendations),
-            "computed_at": computed_at.isoformat() if computed_at else None,
-            "latency_ms": round(latency_ms, 2),
-            "architecture": "no-cloud"
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        if conn:
-            conn.close()
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+    return {
+        "user_id": user_id,
+        "recommendations": recs,
+        "count": len(recs),
+        "computed_at": computed_at,
+        "latency_ms": round(latency_ms, 2),
+        "architecture": "no-cloud (in-memory)"
+    }
 
 
 @app.get("/stats")
 async def get_stats():
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Count users
-        cursor.execute("SELECT COUNT(*) as count FROM users")
-        num_users = cursor.fetchone()['count']
-
-        # Count items
-        cursor.execute("SELECT COUNT(*) as count FROM items")
-        num_items = cursor.fetchone()['count']
-
-        # Count interactions
-        cursor.execute("SELECT COUNT(*) as count FROM interactions")
-        num_interactions = cursor.fetchone()['count']
-
-        # Count precomputed recommendations
-        cursor.execute("SELECT COUNT(*) as count FROM recommendations")
-        num_recommendations = cursor.fetchone()['count']
-
-        cursor.close()
-        conn.close()
-
-        return {
-            "users": num_users,
-            "items": num_items,
-            "interactions": num_interactions,
-            "users_with_recommendations": num_recommendations,
-            "architecture": "no-cloud",
-            "database": "PostgreSQL (single instance)",
-            "caching": "none",
-            "auto_scaling": "disabled"
-        }
-
-    except Exception as e:
-        if conn:
-            conn.close()
-        raise HTTPException(status_code=500, detail=f"Error fetching stats: {str(e)}")
+    """
+    Just returns static/fake stats so the endpoint still works.
+    """
+    return {
+        "users": len(PRECOMPUTED_RECS),
+        "items": len(ITEM_CATALOG),
+        "interactions": 0,
+        "users_with_recommendations": len(PRECOMPUTED_RECS),
+        "architecture": "no-cloud (in-memory)",
+        "database": "none",
+        "caching": "N/A",
+        "auto_scaling": "disabled"
+    }
 
 
 @app.post("/interaction")
 async def record_interaction(user_id: str, item_id: str, rating: float):
+    """
+    For the demo, we just accept the interaction and pretend to store it.
+    No DB writes are actually performed.
+    """
     if rating < 1.0 or rating > 5.0:
         raise HTTPException(status_code=400, detail="Rating must be between 1.0 and 5.0")
 
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Insert interaction
-        cursor.execute(
-            """
-            INSERT INTO interactions (user_id, item_id, rating, timestamp)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (user_id, item_id, rating, int(time.time()))
-        )
-
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-        return {
-            "status": "success",
-            "message": "Interaction recorded",
-            "note": "Recommendations will be updated in next batch re-computation"
-        }
-
-    except Exception as e:
-        if conn:
-            conn.rollback()
-            conn.close()
-        raise HTTPException(status_code=500, detail=f"Error recording interaction: {str(e)}")
+    # In a real system we'd insert into a DB or send to Kafka/Kinesis.
+    # Here we just acknowledge it.
+    return {
+        "status": "success",
+        "message": "Interaction received (not persisted in this demo)",
+        "note": "No-DB architecture for class project"
+    }
 
 
 if __name__ == "__main__":
-    print("Starting No-Cloud Recommendation API")
-    print("Architecture: Single-threaded server on localhost")
-    print("Database: PostgreSQL (no connection pooling)")
-    print("Scaling: None (fixed capacity)")
-    print("Monitoring: Basic logging only")
-
-    # Run with single worker (intentional bottleneck)
+    print("Starting No-Cloud Recommendation API (no PostgreSQL)")
     uvicorn.run(
         app,
         host="0.0.0.0",
         port=8000,
-        workers=1,  # Single process - bottleneck for demo
+        workers=1,
         log_level="info"
     )
