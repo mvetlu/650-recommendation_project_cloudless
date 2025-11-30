@@ -5,8 +5,7 @@ import statistics
 
 OUTPUT_CSV = "system_comparison_metrics.csv"
 
-# TODO: replace with your actual EC2 public IP
-API_URL = "http://18.191.229.202:8000/recommend/1" 
+API_URL = "http://YOUR_EC2_IP:8000/recommend/1" 
 
 
 def measure_cloud_metrics(n_requests=200):
