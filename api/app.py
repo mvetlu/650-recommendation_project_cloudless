@@ -19,15 +19,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --------------------------------------------------------------------------------------
-# In-memory "fake database" so we don't depend on PostgreSQL at all.
-# This is enough for your project to demonstrate recommendations + latency.
-# --------------------------------------------------------------------------------------
 
-# Pretend we have 100 items in the catalog
 ITEM_CATALOG = [f"item_{i}" for i in range(1, 101)]
 
-# Pretend we have some precomputed recs per user
+
 PRECOMPUTED_RECS = {
     "1": [{"item_id": f"item_{i}", "score": round(random.uniform(0.5, 1.0), 3)}
           for i in range(1, 21)],
@@ -76,7 +71,7 @@ async def get_recommendations(user_id: str, limit: int = 10):
     if limit < 1 or limit > 20:
         raise HTTPException(status_code=400, detail="Limit must be between 1 and 20")
 
-    # If we don't have this user, just randomly recommend some items
+
     if user_id not in PRECOMPUTED_RECS:
         recs = [
             {"item_id": random.choice(ITEM_CATALOG), "score": round(random.uniform(0.1, 1.0), 3)}
@@ -126,8 +121,7 @@ async def record_interaction(user_id: str, item_id: str, rating: float):
     if rating < 1.0 or rating > 5.0:
         raise HTTPException(status_code=400, detail="Rating must be between 1.0 and 5.0")
 
-    # In a real system we'd insert into a DB or send to Kafka/Kinesis.
-    # Here we just acknowledge it.
+  
     return {
         "status": "success",
         "message": "Interaction received (not persisted in this demo)",

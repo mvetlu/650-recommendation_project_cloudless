@@ -11,7 +11,7 @@ def parse_markdown_metrics():
     metrics_rows = []
     
     for line in lines:
-        # Detect table rows with actual values
+
         if "|" in line and "Latency" not in line and "Load Level" not in line and "---" not in line:
             parts = [p.strip() for p in line.split("|") if p.strip()]
             if len(parts) == 7:  
@@ -20,7 +20,7 @@ def parse_markdown_metrics():
     if not metrics_rows:
         raise ValueError("No valid metric rows found in baseline_metrics.md")
 
-    # Use the HIGHEST LOAD (last row = Extreme)
+    
     load_level, users, p50, p95, p99, throughput, error_rate = metrics_rows[-1]
 
     def strip_ms(s):
@@ -28,12 +28,12 @@ def parse_markdown_metrics():
 
     return {
         "avg_latency": strip_ms(p50),
-        "min_latency": strip_ms(p50),   # best approximation
+        "min_latency": strip_ms(p50),   
         "max_latency": strip_ms(p99),
         "count": users,
         "error_rate": error_rate.replace("%", "").strip(),
         "recovery_time_sec": "N/A (local server has no auto-recovery)",
-        "uptime": "0%"   # non-cloud == no resilience
+        "uptime": "0%"   
     }
 
 def write_to_csv(data):
