@@ -74,4 +74,4 @@ if __name__ == "__main__":
         print("✔ Cloud EC2 metrics appended to system_comparison_metrics.csv")
         print("Metrics:", m)
     else:
-        print("❌ No successful cloud requests! Check API URL.")
+        print("No successful cloud requests! Check API URL.")
