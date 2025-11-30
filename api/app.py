@@ -136,7 +136,7 @@ async def record_interaction(user_id: str, item_id: str, rating: float):
 
 
 if __name__ == "__main__":
-    print("Starting No-Cloud Recommendation API (no PostgreSQL)")
+    print("Starting Cloud Recommendation API (no PostgreSQL)")
     uvicorn.run(
         app,
         host="0.0.0.0",
