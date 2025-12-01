@@ -13,7 +13,7 @@ def measure_cloud_metrics(n_requests=500):
     latencies = []
     errors = 0
 
-    print(f"Running {n_requests} requests against: {API_URL}")
+    print(f"Running {n_requests} request against: {API_URL}")
 
     for i in range(n_requests):
         start = time.time()
