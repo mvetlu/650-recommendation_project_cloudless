@@ -71,7 +71,7 @@ if __name__ == "__main__":
     m = measure_cloud_metrics()
     if m:
         append_to_csv(m)
-        print("✔ Cloud EC2 metrics appended to system_comparison_metrics.csv")
+        print("Cloud EC2 metrics appended to system_comparison_metrics.csv")
         print("Metrics:", m)
     else:
         print("No successful cloud requests! Check API URL.")

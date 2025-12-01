@@ -201,7 +201,7 @@ def main():
             time.sleep(SAMPLE_INTERVAL)
 
         except Exception as e:
-            print(f"\n❌ Error collecting metrics: {e}")
+            print(f"\nError collecting metrics: {e}")
             time.sleep(SAMPLE_INTERVAL)
 
     # Graceful shutdown

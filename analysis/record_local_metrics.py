@@ -65,4 +65,4 @@ def write_to_csv(data):
 if __name__ == "__main__":
     metrics = parse_markdown_metrics()
     write_to_csv(metrics)
-    print("✔ Local non-cloud metrics successfully written to system_comparison_metrics.csv")
+    print("Local non-cloud metrics successfully written to system_comparison_metrics.csv")
