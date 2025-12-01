@@ -9,7 +9,7 @@ API_URL = "http://3.22.235.209:8000/recommend/1"
  
 
 
-def measure_cloud_metrics(n_requests=200):
+def measure_cloud_metrics(n_requests=500):
     latencies = []
     errors = 0
 
