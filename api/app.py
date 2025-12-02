@@ -17,18 +17,18 @@ from decimal import Decimal
 
 
 
-AWS_REGION = os.getenv("AWS_REGION", "us-east-2")  
+AWS_REGION = os.getenv("AWS_REGION", "us-east-2")
 
 DDB_TABLE_NAME = os.getenv("DDB_TABLE_NAME", "recommendation_requests")
-S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "your-metrics-bucket-name")
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "data650-cloud-metrics")
 CW_NAMESPACE = os.getenv("CW_NAMESPACE", "RecommendationAPI")
 
-# Create AWS clients (they will use the EC2 instance role or ~/.aws/ credentials)
 dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
 ddb_table = dynamodb.Table(DDB_TABLE_NAME)
 
 s3 = boto3.client("s3", region_name=AWS_REGION)
 cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
+
 
 
 
@@ -47,12 +47,16 @@ stdout_handler.setLevel(logging.WARNING)
 stdout_handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
 logger.addHandler(stdout_handler)
 
+
+
+
 app = FastAPI(
     title="Recommendation API (Cloud)",
     description="EC2 + DynamoDB + S3 + CloudWatch demo",
     version="3.0.0"
 )
 
+# CORS for easy testing
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -61,49 +65,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-RATE_LIMIT_MAX = 150          # max requests
-RATE_LIMIT_WINDOW = 180       # seconds
-
+# (Optional) keep these if you want to show design,
+# but the rate limiter can get in the way of demos.
+RATE_LIMIT_MAX = 150
+RATE_LIMIT_WINDOW = 180
 request_counts = defaultdict(list)
 
 
+# ===== Rate Limiter (effectively disabled for demo) =====
 @app.middleware("http")
 async def rate_limiter(request: Request, call_next):
-    ip = request.client.host
-    now = time.time()
-
-    window = [t for t in request_counts[ip] if now - t < RATE_LIMIT_WINDOW]
-    request_counts[ip] = window
-    request_counts[ip].append(now)
-
-    if len(window) > RATE_LIMIT_MAX:
-        logger.warning(
-            f"RATE LIMIT TRIGGERED: {ip} exceeded {RATE_LIMIT_MAX} requests"
-        )
-
-        # Push a CloudWatch metric for rate limit events
-        try:
-            cloudwatch.put_metric_data(
-                Namespace=CW_NAMESPACE,
-                MetricData=[{
-                    "MetricName": "RateLimitTriggered",
-                    "Value": 1.0,
-                    "Unit": "Count"
-                }]
-            )
-        except (BotoCoreError, ClientError) as e:
-            logger.warning(f"Failed to send RateLimitTriggered metric: {e}")
-
-        return JSONResponse(
-            status_code=429,
-            content={"detail": "Too many requests (Rate limit activated)"}
-        )
-
-    response = await call_next(request)
-    return response
+    # For the demo we skip rate limiting entirely
+    return await call_next(request)
 
 
+# ===== Failure logging middleware =====
 @app.middleware("http")
 async def failure_logging(request: Request, call_next):
     try:
@@ -113,7 +89,6 @@ async def failure_logging(request: Request, call_next):
             logger.warning(
                 f"FAILURE: {request.method} {request.url} → Status {response.status_code}"
             )
-            # Optional: could also send a CloudWatch metric here
 
         return response
 
@@ -121,7 +96,6 @@ async def failure_logging(request: Request, call_next):
         logger.error(
             f"EXCEPTION: {request.method} {request.url} → Error: {str(e)}"
         )
-        # Send CloudWatch metric for exceptions
         try:
             cloudwatch.put_metric_data(
                 Namespace=CW_NAMESPACE,
@@ -133,8 +107,8 @@ async def failure_logging(request: Request, call_next):
             )
         except (BotoCoreError, ClientError):
             pass
-
         raise e
+
 
 
 
@@ -146,42 +120,53 @@ PRECOMPUTED_RECS = {
 }
 
 
-def log_request_to_dynamodb(user_id: str, latency_ms: float, limit: int, success: bool, error_msg: str = ""):
-    """Store a single request record in DynamoDB."""
+
+
+def log_request_to_dynamodb(
+    user_id: str,
+    latency_ms: float,
+    limit: int,
+    success: bool,
+    error_msg: str = ""
+) -> None:
+    """Store a single request record in DynamoDB using Decimal types."""
     try:
         ts = int(time.time())
         ddb_table.put_item(
             Item={
-                "request_id": f"{user_id}-{ts}-{random.randint(1000,9999)}",
+                "request_id": f"{user_id}-{ts}-{random.randint(1000, 9999)}",
                 "user_id": user_id,
                 "timestamp": Decimal(str(ts)),
                 "latency_ms": Decimal(str(round(latency_ms, 2))),
                 "limit": Decimal(str(limit)),
                 "success": Decimal("1") if success else Decimal("0"),
-                "error_message": error_msg,
+                "error_message": error_msg or "",
             }
         )
-    except (BotoCoreError, ClientError, TypeError) as e:
+    except Exception as e:
         logger.warning(f"Failed to write to DynamoDB: {e}")
 
 
-def upload_metrics_to_s3(payload: Dict[str, Any]):
+def upload_metrics_to_s3(payload: Dict[str, Any]) -> None:
     """Upload a small JSON metrics blob to S3 per request."""
     try:
+        # Ensure everything is JSON-serializable
+        safe_payload = json.loads(json.dumps(payload, default=str))
+
         now = datetime.now(timezone.utc).isoformat()
         key = f"metrics/requests/{now}.json"
 
         s3.put_object(
             Bucket=S3_BUCKET_NAME,
             Key=key,
-            Body=json.dumps(payload).encode("utf-8"),
+            Body=json.dumps(safe_payload).encode("utf-8"),
             ContentType="application/json"
         )
-    except (BotoCoreError, ClientError) as e:
+    except (BotoCoreError, ClientError, TypeError) as e:
         logger.warning(f"Failed to upload metrics to S3: {e}")
 
 
-def send_latency_metric_to_cloudwatch(latency_ms: float):
+def send_latency_metric_to_cloudwatch(latency_ms: float) -> None:
     """Send custom latency metric to CloudWatch."""
     try:
         cloudwatch.put_metric_data(
@@ -194,6 +179,7 @@ def send_latency_metric_to_cloudwatch(latency_ms: float):
         )
     except (BotoCoreError, ClientError) as e:
         logger.warning(f"Failed to send latency metric: {e}")
+
 
 
 
@@ -222,14 +208,14 @@ async def health():
 
     # Check DynamoDB
     try:
-        ddb_table.load()  # simple call to ensure table is reachable
+        ddb_table.load()
         aws_status["dynamodb"] = "ok"
     except Exception as e:
         aws_status["dynamodb"] = f"error: {e}"
 
-    # Check S3
+    # Check S3 (use head_bucket instead of list_buckets)
     try:
-        s3.list_buckets()
+        s3.head_bucket(Bucket=S3_BUCKET_NAME)
         aws_status["s3"] = "ok"
     except Exception as e:
         aws_status["s3"] = f"error: {e}"
@@ -256,8 +242,7 @@ async def health():
 
 
 @app.get("/recommend/{user_id}")
-async def recommend(user_id: str, limit: int = 10, request: Request = None):
-
+async def recommend(user_id: str, request: Request, limit: int = 10):
     if limit < 1 or limit > 20:
         logger.warning(f"Invalid 'limit' value: {limit}")
         raise HTTPException(status_code=400, detail="Limit must be between 1 and 20")
@@ -265,33 +250,36 @@ async def recommend(user_id: str, limit: int = 10, request: Request = None):
     start = time.time()
     success = True
     error_msg = ""
+    latency_ms = 0.0
 
     try:
-        # Simple recommendation logic (as before)
+        # Simple recommendation logic
         if user_id not in PRECOMPUTED_RECS:
             recs = [
-                {"item_id": random.choice(ITEM_CATALOG),
-                 "score": round(random.uniform(0.1, 1.0), 3)}
+                {
+                    "item_id": random.choice(ITEM_CATALOG),
+                    "score": round(random.uniform(0.1, 1.0), 3)
+                }
                 for _ in range(limit)
             ]
         else:
             recs = PRECOMPUTED_RECS[user_id][:limit]
 
-        latency_ms = (time.time() - start) * 1000
+        latency_ms = (time.time() - start) * 1000.0
+        latency_rounded = round(latency_ms, 2)
 
-        # Build metrics payload
         client_ip = request.client.host if request else "unknown"
+
         metric_payload = {
             "user_id": user_id,
             "limit": limit,
-            "latency_ms": Decimal(str(round(latency_ms, 2))),
-
+            "latency_ms": latency_rounded,
             "timestamp": int(time.time()),
             "client_ip": client_ip,
             "success": True
         }
 
-        # === AWS INTEGRATIONS ===
+    
         log_request_to_dynamodb(user_id, latency_ms, limit, success=True)
         upload_metrics_to_s3(metric_payload)
         send_latency_metric_to_cloudwatch(latency_ms)
@@ -299,7 +287,7 @@ async def recommend(user_id: str, limit: int = 10, request: Request = None):
         return {
             "user_id": user_id,
             "recommendations": recs,
-            "latency_ms": Decimal(str(round(latency_ms, 2))),
+            "latency_ms": latency_rounded,
             "cloud_storage": {
                 "dynamodb": DDB_TABLE_NAME,
                 "s3_bucket": S3_BUCKET_NAME,
@@ -311,8 +299,13 @@ async def recommend(user_id: str, limit: int = 10, request: Request = None):
         success = False
         error_msg = str(e)
         logger.error(f"Error in /recommend for user {user_id}: {error_msg}")
-        # Log failure to DynamoDB as well
-        log_request_to_dynamodb(user_id, latency_ms=0.0, limit=limit, success=False, error_msg=error_msg)
+        log_request_to_dynamodb(
+            user_id,
+            latency_ms=0.0,
+            limit=limit,
+            success=False,
+            error_msg=error_msg
+        )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
