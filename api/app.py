@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 
 
-AWS_REGION = os.getenv("AWS_REGION", "us-east-1")  # change to us-east-2 if needed
+AWS_REGION = os.getenv("AWS_REGION", "us-east-2")  
 
 DDB_TABLE_NAME = os.getenv("DDB_TABLE_NAME", "recommendation_requests")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "your-metrics-bucket-name")
