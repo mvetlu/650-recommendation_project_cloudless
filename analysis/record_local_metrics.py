@@ -1,40 +1,56 @@
 import csv
-import re
+import psycopg2
+import statistics
 
-INPUT_FILE = "results/baseline_metrics.md"
 OUTPUT_CSV = "system_comparison_metrics.csv"
 
-def parse_markdown_metrics():
-    with open(INPUT_FILE, "r") as f:
-        lines = f.readlines()
+DB_CONFIG = {
+    "host": "localhost",
+    "database": "recommendations",
+    "user": "s4p",
+    "password": ""  # or your password
+}
 
-    metrics_rows = []
-    
-    for line in lines:
+def fetch_local_requests():
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
 
-        if "|" in line and "Latency" not in line and "Load Level" not in line and "---" not in line:
-            parts = [p.strip() for p in line.split("|") if p.strip()]
-            if len(parts) == 7:  
-                metrics_rows.append(parts)
+    cur.execute("""
+        SELECT latency_ms, success
+        FROM local_requests
+    """)
 
-    if not metrics_rows:
-        raise ValueError("No valid metric rows found in baseline_metrics.md")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
 
-    
-    load_level, users, p50, p95, p99, throughput, error_rate = metrics_rows[-1]
+    return rows
 
-    def strip_ms(s):
-        return s.replace("ms", "").replace(" ", "").strip()
+
+def compute_metrics(rows):
+    latencies = [float(r[0]) for r in rows]
+    errors = sum(1 for r in rows if r[1] is False)
+
+    latencies.sort()
+    total = len(latencies)
+
+    def percentile(p):
+        index = int(total * p)
+        return latencies[index]
 
     return {
-        "avg_latency": strip_ms(p50),
-        "min_latency": strip_ms(p50),   
-        "max_latency": strip_ms(p99),
-        "count": users,
-        "error_rate": error_rate.replace("%", "").strip(),
-        "recovery_time_sec": "N/A (local server has no auto-recovery)",
-        "uptime": "0%"   
+        "avg_latency": round(statistics.mean(latencies), 2),
+        "min_latency": round(min(latencies), 2),
+        "max_latency": round(max(latencies), 2),
+        "p50": round(percentile(0.50), 2),
+        "p95": round(percentile(0.95), 2),
+        "p99": round(percentile(0.99), 2),
+        "count": total,
+        "error_rate": round(errors / total * 100, 2),
+        "recovery_time_sec": "N/A",
+        "uptime": "0%"
     }
+
 
 def write_to_csv(data):
     headers = [
@@ -48,7 +64,7 @@ def write_to_csv(data):
         "uptime_percent"
     ]
 
-    with open(OUTPUT_CSV, "w", newline="") as f:
+    with open(OUTPUT_CSV, "a", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(headers)
         writer.writerow([
@@ -62,7 +78,10 @@ def write_to_csv(data):
             data["uptime"]
         ])
 
+
 if __name__ == "__main__":
-    metrics = parse_markdown_metrics()
+    rows = fetch_local_requests()
+    metrics = compute_metrics(rows)
     write_to_csv(metrics)
-    print("Local non-cloud metrics successfully written to system_comparison_metrics.csv")
+    print("Local non-cloud metrics appended to system_comparison_metrics.csv")
+    print(metrics)
