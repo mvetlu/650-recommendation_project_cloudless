@@ -1,6 +1,7 @@
 import csv
 import psycopg2
 import statistics
+import os
 
 OUTPUT_CSV = "system_comparison_metrics.csv"
 
@@ -8,8 +9,9 @@ DB_CONFIG = {
     "host": "localhost",
     "database": "recommendations",
     "user": "s4p",
-    "password": ""  # or your password
+    "password": ""   # add if needed
 }
+
 
 def fetch_local_requests():
     conn = psycopg2.connect(**DB_CONFIG)
@@ -29,13 +31,15 @@ def fetch_local_requests():
 
 def compute_metrics(rows):
     latencies = [float(r[0]) for r in rows]
-    errors = sum(1 for r in rows if r[1] is False)
-
-    latencies.sort()
     total = len(latencies)
 
+    # count errors (boolean or int)
+    errors = sum(1 for r in rows if (r[1] == False or r[1] == 0))
+
+    latencies.sort()
+
     def percentile(p):
-        index = int(total * p)
+        index = min(int(total * p), total - 1)
         return latencies[index]
 
     return {
@@ -64,9 +68,12 @@ def write_to_csv(data):
         "uptime_percent"
     ]
 
+    write_header = not os.path.exists(OUTPUT_CSV)
+
     with open(OUTPUT_CSV, "a", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(headers)
+        if write_header:
+            writer.writerow(headers)
         writer.writerow([
             "local_non_cloud",
             data["avg_latency"],
@@ -83,5 +90,5 @@ if __name__ == "__main__":
     rows = fetch_local_requests()
     metrics = compute_metrics(rows)
     write_to_csv(metrics)
-    print("Local non-cloud metrics appended to system_comparison_metrics.csv")
+    print("Local non-cloud metrics appended!")
     print(metrics)
