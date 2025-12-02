@@ -12,6 +12,8 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import json
 from datetime import datetime, timezone
+from decimal import Decimal
+
 
 
 
@@ -152,14 +154,14 @@ def log_request_to_dynamodb(user_id: str, latency_ms: float, limit: int, success
             Item={
                 "request_id": f"{user_id}-{ts}-{random.randint(1000,9999)}",
                 "user_id": user_id,
-                "timestamp": ts,
-                "latency_ms": round(latency_ms, 2),
-                "limit": limit,
-                "success": success,
+                "timestamp": Decimal(str(ts)),
+                "latency_ms": Decimal(str(round(latency_ms, 2))),
+                "limit": Decimal(str(limit)),
+                "success": Decimal("1") if success else Decimal("0"),
                 "error_message": error_msg,
             }
         )
-    except (BotoCoreError, ClientError) as e:
+    except (BotoCoreError, ClientError, TypeError) as e:
         logger.warning(f"Failed to write to DynamoDB: {e}")
 
 
@@ -282,7 +284,8 @@ async def recommend(user_id: str, limit: int = 10, request: Request = None):
         metric_payload = {
             "user_id": user_id,
             "limit": limit,
-            "latency_ms": round(latency_ms, 2),
+            "latency_ms": Decimal(str(round(latency_ms, 2))),
+
             "timestamp": int(time.time()),
             "client_ip": client_ip,
             "success": True
@@ -296,7 +299,7 @@ async def recommend(user_id: str, limit: int = 10, request: Request = None):
         return {
             "user_id": user_id,
             "recommendations": recs,
-            "latency_ms": round(latency_ms, 2),
+            "latency_ms": Decimal(str(round(latency_ms, 2))),
             "cloud_storage": {
                 "dynamodb": DDB_TABLE_NAME,
                 "s3_bucket": S3_BUCKET_NAME,
