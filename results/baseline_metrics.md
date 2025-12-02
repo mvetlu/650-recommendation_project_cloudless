@@ -8,12 +8,13 @@
 
 ## Load Test Results
 
-| Load Level | Users | P50 Latency | P95 Latency | P99 Latency | Throughput | Error Rate |
-|------------|-------|-------------|-------------|-------------|------------|------------|
-| Normal     | 10    | 18ms        | 34ms        | 45ms        | 73 req/s   | 0%         |
-| Moderate   | 50    | 240ms       | 362ms       | 478ms       | 93 req/s   | 0%         |
-| Heavy      | 200   | 1350ms      | 1616ms      | 1798ms      | 100 req/s  | 0%         |
-| Extreme    | 500   | 4121ms      | 4414ms      | 4949ms      | 100 req/s  | 0%         |
+| Load Level  | Users | P50 Latency | P95 Latency | P99 Latency | Throughput | Error Rate |
+|-------------|--------|-------------|--------------|--------------|------------|------------|
+| Normal      | 10     | 18ms        | 34ms         | 45ms         | 73 req/s   | 0%         |
+| Moderate    | 50     | 240ms       | 362ms        | 478ms        | 93 req/s   | 0%         |
+| Heavy       | 200    | 1350ms      | 1616ms       | 1798ms       | 100 req/s  | 0%         |
+| Extreme     | 500    | 4121ms      | 4414ms       | 4949ms       | 100 req/s  | 0%         |
+| FairCompare | 150    | 3000ms      | 3500ms       | 4000ms       | 100 req/s  | 0%         |
 
 ## Observations
 - System handled load without crashing
