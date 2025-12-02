@@ -106,7 +106,7 @@ async def recommend(user_id: str, limit: int = 10, request: Request = None):
     start = time.time()
     success = True
     error_msg = ""
-    latency_ms = 0.0
+    latency_ms = (time.perf_counter() - start) * 1000
 
     try:
         # Same logic as cloud for fairness
