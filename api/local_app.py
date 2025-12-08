@@ -121,9 +121,6 @@ async def recommend(user_id: str, limit: int = 10, request: Request = None):
 async def crash():
     raise RuntimeError("Manual crash triggered for testing")
 
-# -----------------------
-#       RUN SERVER
-# -----------------------
 if __name__ == "__main__":
     import uvicorn
     print("Starting Local API (PostgreSQL logging enabled)")
