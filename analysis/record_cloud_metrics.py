@@ -5,7 +5,7 @@ import statistics
 
 OUTPUT_CSV = "system_comparison_metrics.csv"
 
-API_URL = "http://18.225.10.118:8000/recommend/1"
+API_URL = "http://18.216.151.197:8000/recommend/1"
  
 
 
