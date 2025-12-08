@@ -5,6 +5,14 @@ import time
 from decimal import Decimal
 from botocore.exceptions import ClientError
 
+"""
+# Flow:
+select "n" if this files doesn't exist in ../data/models
+(0) run dynamodb_tables.md bash in CLI to create and check tables are active in dynamodb
+(1) run load_dynamodb.py
+(2) export recommendations_export.csv from PostGreSQL 
+(3) dynamodb fills tables based on csv
+"""
 # ============================================================================
 # CONFIGURATION - EDIT THIS SECTION TO SWITCH BETWEEN 10 AND 10K USERS
 # ============================================================================

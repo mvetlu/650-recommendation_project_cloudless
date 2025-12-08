@@ -7,6 +7,8 @@ import time
 import os
 from typing import List, Dict, Any
 import uvicorn
+from fastapi.responses import HTMLResponse
+
 
 app = FastAPI(
     title="Recommendation API - No Cloud",
@@ -185,6 +187,152 @@ async def get_stats():
             conn.close()
         raise HTTPException(status_code=500, detail=f"Error fetching stats: {str(e)}")
 
+@app.get("/stats/ui", response_class=HTMLResponse)
+async def stats_ui():
+    """
+    Simple human-friendly dashboard-style view of the same stats
+    that /stats returns as JSON.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) as count FROM users")
+        num_users = cursor.fetchone()['count']
+
+        cursor.execute("SELECT COUNT(*) as count FROM items")
+        num_items = cursor.fetchone()['count']
+
+        cursor.execute("SELECT COUNT(*) as count FROM interactions")
+        num_interactions = cursor.fetchone()['count']
+
+        cursor.execute("SELECT COUNT(*) as count FROM recommendations")
+        num_recommendations = cursor.fetchone()['count']
+
+        cursor.close()
+        conn.close()
+
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>No-Cloud Recommendation Stats</title>
+            <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                    background: #0b0c10;
+                    color: #e5e5e5;
+                    margin: 0;
+                    padding: 2rem;
+                }}
+                .container {{
+                    max-width: 900px;
+                    margin: 0 auto;
+                }}
+                h1 {{
+                    margin-bottom: 0.25rem;
+                }}
+                .subtitle {{
+                    color: #9ca3af;
+                    margin-bottom: 1.5rem;
+                }}
+                .grid {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                    gap: 1rem;
+                    margin-bottom: 2rem;
+                }}
+                .card {{
+                    background: #111827;
+                    border-radius: 0.75rem;
+                    border: 1px solid #1f2937;
+                    padding: 1rem 1.25rem;
+                }}
+                .label {{
+                    font-size: 0.75rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.08em;
+                    color: #9ca3af;
+                    margin-bottom: 0.25rem;
+                }}
+                .value {{
+                    font-size: 1.5rem;
+                    font-weight: 600;
+                }}
+                .meta {{
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 0.75rem;
+                    font-size: 0.85rem;
+                    color: #9ca3af;
+                }}
+                .pill {{
+                    border-radius: 999px;
+                    border: 1px solid #374151;
+                    padding: 0.25rem 0.75rem;
+                    background: #020617;
+                }}
+                a {{
+                    color: #38bdf8;
+                    text-decoration: none;
+                }}
+                a:hover {{
+                    text-decoration: underline;
+                }}
+            </style>
+        </head>
+        <body>
+        <div class="container">
+            <h1>No-Cloud Recommendation Service</h1>
+            <div class="subtitle">
+                Local FastAPI + PostgreSQL instance — live stats from the current database.
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <div class="label">Users</div>
+                    <div class="value">{num_users}</div>
+                </div>
+                <div class="card">
+                    <div class="label">Items</div>
+                    <div class="value">{num_items}</div>
+                </div>
+                <div class="card">
+                    <div class="label">Interactions</div>
+                    <div class="value">{num_interactions}</div>
+                </div>
+                <div class="card">
+                    <div class="label">Users with Recommendations</div>
+                    <div class="value">{num_recommendations}</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="label">Architecture</div>
+                <div class="meta">
+                    <span class="pill">Mode: no-cloud (single host)</span>
+                    <span class="pill">DB: PostgreSQL (single instance)</span>
+                    <span class="pill">Caching: none</span>
+                    <span class="pill">Auto-scaling: disabled</span>
+                </div>
+                <p style="margin-top: 1rem; font-size: 0.9rem; color: #9ca3af;">
+                    This view is just a human-friendly wrapper around the
+                    <code>/stats</code> JSON endpoint. For programmatic access,
+                    use <a href="/stats">/stats</a>; for API docs, visit
+                    <a href="/docs">/docs</a>.
+                </p>
+            </div>
+        </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html)
+
+    except Exception as e:
+        if conn:
+            conn and conn.close()
+        raise HTTPException(status_code=500, detail=f"Error rendering stats UI: {str(e)}")
 
 @app.post("/interaction")
 async def record_interaction(user_id: str, item_id: str, rating: float):

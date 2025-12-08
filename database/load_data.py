@@ -11,12 +11,12 @@ DB_CONFIG = {
 }
 
 CSV_PATHS = {
-    # "users": "../data/processed/users_top10k.csv",
-    # "items": "../data/processed/items_metadata.csv",
-    # "interactions": "../data/processed/interactions_filtered.csv",
-    "users": "../data/processed/users_sample10.csv",
-    "items": "../data/processed/sample_items_metadata.csv",
-    "interactions": "../data/processed/interactions_sample.csv",
+    "users": "../data/processed/users_top10k.csv",
+    "items": "../data/processed/items_metadata.csv",
+    "interactions": "../data/processed/interactions_filtered.csv",
+    #"users": "../data/processed/users_sample10.csv",
+    #"items": "../data/processed/sample_items_metadata.csv",
+    #"interactions": "../data/processed/interactions_sample.csv",
 }
 
 BATCH_SIZE = 10000
