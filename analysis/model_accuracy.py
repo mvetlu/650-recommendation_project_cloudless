@@ -22,6 +22,7 @@ INTERACTIONS_CSV = "../data/processed/interactions_filtered.csv"
 # Rating scale for Amazon reviews (adjust if your data differs)
 RATING_MIN = 1.0
 RATING_MAX = 5.0
+RATING_RANGE = RATING_MAX - RATING_MIN
 
 # Number of cross-validation folds
 N_FOLDS = 3
@@ -52,7 +53,7 @@ def load_interactions(csv_path: str) -> pd.DataFrame:
         "Timestamp": "timestamp",
     }
     df = df.rename(columns=rename_map)
-    
+
     # Basic sanity check
     expected_cols = {"user_id", "item_id", "rating"}
     if not expected_cols.issubset(df.columns):
@@ -97,6 +98,17 @@ def evaluate_svd(data: Dataset, n_folds: int = 3):
     rmse_scores = results["test_rmse"]
     mae_scores = results["test_mae"]
 
+    avg_rmse = sum(rmse_scores) / len(rmse_scores)
+    avg_mae = sum(mae_scores) / len(mae_scores)
+
+    # Normalized errors (0–1 scale, relative to rating range)
+    if RATING_RANGE <= 0:
+        raise ValueError("RATING_MAX must be greater than RATING_MIN")
+
+    nrmse = avg_rmse / RATING_RANGE
+    nmae = avg_mae / RATING_RANGE
+
+
     print("\n=== Summary ===")
     print(f"Folds: {n_folds}")
     print(f"RMSE per fold: {[round(x, 4) for x in rmse_scores]}")
@@ -104,6 +116,11 @@ def evaluate_svd(data: Dataset, n_folds: int = 3):
     print(f"Avg RMSE: {sum(rmse_scores)/len(rmse_scores):.4f}")
     print(f"Avg MAE:  {sum(mae_scores)/len(mae_scores):.4f}")
 
+    print("\n--- Normalized errors (relative to rating range "
+          f"[{RATING_MIN}, {RATING_MAX}] ---")
+    print(f"Rating range: {RATING_RANGE:.1f}")
+    print(f"NRMSE (RMSE / range): {nrmse:.4f}")
+    print(f"NMAE (MAE  / range): {nmae:.4f}")
 
 def main():
     df = load_interactions(INTERACTIONS_CSV)
