@@ -64,7 +64,7 @@ def log_local_request(
             (
                 user_id,
                 int(time.time()),
-                round(latency_ms, 2),
+                latency_ms,
                 limit,
                 success,
                 error_msg
@@ -130,7 +130,7 @@ async def recommend(user_id: str, limit: int = 10, request: Request = None):
         return {
             "user_id": user_id,
             "recommendations": recs,
-            "latency_ms": round(latency_ms, 2),
+            "latency_ms": latency_ms,
             "storage": "Local PostgreSQL (local_requests table)"
         }
 
@@ -149,6 +149,6 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=8001,   # ✅ DIFFERENT FROM CLOUD
+        port=8001,   
         log_level="info"
     )
