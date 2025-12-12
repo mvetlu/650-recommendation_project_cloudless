@@ -1,7 +1,7 @@
 import requests
 import time
 
-URL = "http://localhost:8000/recommend/1"
+URL = "http://127.0.0.1:8001/recommend/1"  
 
 for i in range(500):
     try:
