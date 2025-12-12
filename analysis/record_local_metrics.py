@@ -35,7 +35,7 @@ def compute_metrics(rows):
     error_rate = round(errors / total_requests * 100, 2)
 
     return {
-        "avg_latency_ms": round(statistics.mean(latencies), 2),
+        "avg_latency_ms": round(statistics.mean(latencies), 3),
         "min_latency_ms": round(min(latencies), 2),
         "max_latency_ms": round(max(latencies), 2),
         "records": total_requests,
